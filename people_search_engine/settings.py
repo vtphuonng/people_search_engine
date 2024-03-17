@@ -37,6 +37,7 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'rest_framework'
 ]
 
 MIDDLEWARE = [
@@ -75,28 +76,28 @@ WSGI_APPLICATION = 'people_search_engine.wsgi.application'
 
 # # dead server - waiting to alive
 
-# DATABASES = {
-#     'default': {
-#         'ENGINE': 'django.db.backends.postgresql',  # Database engine
-#         'NAME': 'residentinformation',             # Database name
-#         'USER': 'pps_admin',                       # Database user
-#         'PASSWORD': 'pps_Admin1@3',                # Database password
-#         'HOST': '117.1.29.237',                    # Database host
-#         'PORT': '5432',                            # Database port
-#     }
-# }
-
-# local server - testing
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.postgresql',
-        'NAME': 'postgres',
-        'USER': 'postgres',
-        'PASSWORD': '04072004',
-        'HOST': 'localhost',  # Use 'localhost' for local PostgreSQL
-        'PORT': '5432',       # Default PostgreSQL port
+        'ENGINE': 'django.db.backends.postgresql',  # Database engine
+        'NAME': 'residentinformation',             # Database name
+        'USER': 'pps_admin',                       # Database user
+        'PASSWORD': 'pps_Admin1@3',                # Database password
+        'HOST': '117.1.29.237',                    # Database host
+        'PORT': '5432',                            # Database port
     }
 }
+
+# # local server - testing
+# DATABASES = {
+#     'default': {
+#         'ENGINE': 'django.db.backends.postgresql',
+#         'NAME': 'postgres',
+#         'USER': 'postgres',
+#         'PASSWORD': '04072004',
+#         'HOST': 'localhost',  # Use 'localhost' for local PostgreSQL
+#         'PORT': '5432',       # Default PostgreSQL port
+#     }
+# }
 
 # Password validation
 # https://docs.djangoproject.com/en/5.0/ref/settings/#auth-password-validators
