@@ -4,6 +4,8 @@ import psycopg2.extras
 from telegram import Update
 from telegram.ext import CallbackContext, CommandHandler, Updater
 from queue import Queue
+from telegram import ChatAction
+import time
 
 update_queue = Queue()
 
@@ -12,7 +14,7 @@ DATABASE_CONFIG = {
     'database': 'residentinformation',
     'user': 'pps_admin',
     'password': 'pps_Admin!23$%',
-    'host': '117.1.29.237',
+    'host': 'localhost',
     'port': 5432
 }
 BOT_TOKEN = "7086978759:AAEpwfTwit1J7hqG6qxRXRxiJVi6HL-xJ_0"
@@ -28,46 +30,55 @@ def connect_database():
 def execute_query(query, params=None):
     with connect_database() as conn:
         with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
-            try:
+            
                 cur.execute(query, params)
-                results = cur.fetchall()
-                return results
-            except (Exception, psycopg2.DatabaseError) as error:
-                logger.error("Error in database operation: %s", error)
-                return None
+                columns = [desc[0] for desc in cur.description]
+                rows = cur.fetchall()
+                result_dict = {column: [] for column in columns}
+                for row in rows:
+                    for i in range(len(columns)):
+                        result_dict[columns[i]].append(row[i])
+                filtered_dict = {key: value for key, value in result_dict.items() if any(value)}
+                return filtered_dict
 
 # --- Search Functions ---
 def search_phonenumber(phone_number):
-    query = """
-            SELECT name, identitynumber, phone_number  
-            FROM basicinformation 
-            WHERE phone_number = %s; 
+    time.sleep(2)
+    phone_number = str(phone_number)
+    if phone_number.startswith('0'):
+        phone_number = phone_number.replace('0', '+84', 1)
+    query = f"""
+            SELECT * 
+            FROM peopledata.person_full 
+            WHERE phone ->> 0 = '{phone_number}'; 
             """
-    results = execute_query(query, (phone_number,))
+    filtered_dict = execute_query(query)
 
-    if results:
-        response = "Search results:\n"
-        for row in results:
-            response += f"Name: {row['name']}\nIdentity Number: {row['identitynumber']}\nPhone Number: {row['phone_number']}\n\n"
+    response = "Search results:\n"
+    if filtered_dict:
+        for key, values in filtered_dict.items():
+            response += f"{key}: {', '.join(map(str, values))}\n"
     else:
         response = "No results found for that phone number."
 
     return response
 
 def search_facebook(uid_or_phone):
-    query = """
-            SELECT name, uid, phone_number
-            FROM socialnetworkprofile 
-            WHERE uid = %s OR phone_number = %s; 
+    time.sleep(2)
+    query = f"""
+            SELECT * from peopledata.socialnetworkprofile s
+            WHERE s.fbuid ->> 0 = '{uid_or_phone}'
+            or s.fbuid ->> '$numberLong' = '{uid_or_phone}'
+            or s.fbuid ->> '$numberInt' = '{uid_or_phone}'
             """
-    results = execute_query(query, (uid_or_phone, uid_or_phone))
-    if results:
-        response = "Facebook Search Results:\n"
-        for row in results:
-            response += f"Name: {row.get('name')}\nUID: {row['uid']}\nPhone: {row.get('phone_number')}\n\n"  
+    filtered_dict = execute_query(query)
+    respone_str = 'Facebook search result:\n'
+    if filtered_dict:
+        for key, values in filtered_dict.items():
+            respone_str += f"{key}: {', '.join(map(str, values))}\n"
     else:
-        response = "No Facebook profiles found."
-    return response
+        respone_str = "No Facebook profiles found."
+    return respone_str
 
 def search_instagram(username):
     query = """
@@ -76,7 +87,7 @@ def search_instagram(username):
             WHERE username->>'username' = %s; 
             """
     results = execute_query(query, (username,))
-
+    
     if results:
         response = "Instagram Search Results:\n"
         for row in results:
@@ -86,33 +97,53 @@ def search_instagram(username):
     return response
 
 def search_location(location):
-    query = """
-            SELECT name, location
-            FROM socialnetworkprofile 
-            WHERE location @> %s; 
-            """
-    results = execute_query(query, (location,))
+    time.sleep(2)
+    query = f"""
+                SELECT *
+                FROM peopledata.person_full 
+                WHERE address ->> 'street' like '%{location.title()}%'
+                LIMIT 1; 
+                """      
+    results = execute_query(query)
 
+    response = "Search results:\n"
     if results:
-        response = "Location Search Results:\n"
-        for row in results:
-            response += f"Name: {row.get('name')}\nLocation: {row['location']}\n\n"
+        for key, values in results.items():
+            response += f"{key}: {', '.join(map(str, values))}\n"
     else:
-        response = "No profiles found for that location."
+        response = f"No profiles found for location {location.title()}"
     return response
 
 def search_mailaddress(email):
+    time.sleep(2)
     query = """
-            SELECT name, email
-            FROM socialnetworkprofile 
-            WHERE email->>'email' = %s; 
+            SELECT *
+            FROM peopledata.person_full 
+            WHERE email->> 0 = %s; 
             """
     results = execute_query(query, (email,))
 
+    response = "Email Search Results:\n"
     if results:
-        response = "Email Search Results:\n"
-        for row in results:
-            response += f"Name: {row.get('name')}\nEmail: {row['email']}\n\n"
+        for key, values in results.items():
+            response += f"{key}: {', '.join(map(str, values))}\n"
+    else:
+        response = "No profiles found for that email."
+    return response
+
+def search_name(name):
+    time.sleep(2)
+    query = """
+            SELECT *
+            FROM peopledata.person_full 
+            WHERE name = %s; 
+            """
+    results = execute_query(query, (name,))
+
+    response = "Name Search Results:\n"
+    if results:
+        for key, values in results.items():
+            response += f"{key}: {', '.join(map(str, values))}\n"
     else:
         response = "No profiles found for that email."
     return response
@@ -125,20 +156,24 @@ def start(update: Update, context: CallbackContext) -> None:
         '/search_facebook <uid/số điện thoại>\n'
         '/search_instagram <username Instagram>\n'
         '/search_location <vị trí>\n'
-        '/search_mailaddress <địa chỉ email>'      
+        '/search_mailaddress <địa chỉ email>\n' 
+        '/search_name <họ và tên>'    
     )
 
 def handle_search_phonenumber(update: Update, context: CallbackContext) -> None:
     if context.args:
         phone_number = context.args[0]
+        context.bot.send_chat_action(chat_id=update.effective_chat.id, action=ChatAction.TYPING)
+
         response = search_phonenumber(phone_number)
         update.message.reply_text(response)
     else:
         update.message.reply_text("Vui lòng cung cấp số điện thoại.")
 
-def handle_search_facebook(update: Update, context: CallbackContext) -> None:
+def handle_search_facebook(update: Update, context: CallbackContext):
     if context.args:
         uid_or_phone = context.args[0]
+        context.bot.send_chat_action(chat_id=update.effective_chat.id, action=ChatAction.TYPING)
         response = search_facebook(uid_or_phone)
         update.message.reply_text(response)
     else:
@@ -153,8 +188,11 @@ def handle_search_instagram(update: Update, context: CallbackContext) -> None:
         update.message.reply_text("Vui lòng cung cấp username của tài khoản Instagram.")
 
 def handle_search_location(update: Update, context: CallbackContext) -> None:
+    #location = [param.strip() for param in context.args[0].split(',')]
     if context.args:
-        location = context.args[0]
+        location = context.args
+        location = ' '.join(location)
+        context.bot.send_chat_action(chat_id=update.effective_chat.id, action=ChatAction.TYPING)
         response = search_location(location)
         update.message.reply_text(response)
     else:
@@ -163,26 +201,40 @@ def handle_search_location(update: Update, context: CallbackContext) -> None:
 def handle_search_mailaddress(update: Update, context: CallbackContext) -> None:
     if context.args:
         email = context.args[0]
+        context.bot.send_chat_action(chat_id=update.effective_chat.id, action=ChatAction.TYPING)
         response = search_mailaddress(email)
         update.message.reply_text(response)
     else:
         update.message.reply_text("Vui lòng cung cấp địa chỉ email.")
 
+def handle_search_name(update: Update, context: CallbackContext) -> None:
+    if context.args:
+        name = context.args
+        name = ' '.join(name)
+        context.bot.send_chat_action(chat_id=update.effective_chat.id, action=ChatAction.TYPING)
+        response = search_name(name)
+        update.message.reply_text(response)
+    else:
+        update.message.reply_text("Vui lòng cung cấp tên.")
+
 # --- Main Function ---
 def main():
-    updater = Updater('7086978759:AAEpwfTwit1J7hqG6qxRXRxiJVi6HL-xJ_0', update_queue=update_queue) 
+    updater = Updater('7086978759:AAEpwfTwit1J7hqG6qxRXRxiJVi6HL-xJ_0') 
     dp = updater.dispatcher
 
     dp.add_handler(CommandHandler("start", start))
     dp.add_handler(CommandHandler("search_phonenumber", handle_search_phonenumber))
     dp.add_handler(CommandHandler("search_facebook", handle_search_facebook))
     dp.add_handler(CommandHandler("search_instagram", handle_search_instagram))
-    dp.add_handler(CommandHandler("search_location", handle_search_location))
+    dp.add_handler(CommandHandler("search_location", handle_search_location,pass_args=True))
     dp.add_handler(CommandHandler("search_mailaddress", handle_search_mailaddress))
+    dp.add_handler(CommandHandler("search_name", handle_search_name))
+
     
 
     updater.start_polling()
     updater.idle()
 
 if __name__ == '__main__':
+    #print(search_facebook(100003986334132))
     main()
